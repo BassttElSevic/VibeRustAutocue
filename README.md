@@ -3,6 +3,4 @@ an AutoCue Vibe by rust
 
 ---
 
-首先，这个项目，我们要这么划分
-
-
+项目架构设计详见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
