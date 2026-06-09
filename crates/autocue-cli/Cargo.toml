@@ -19,3 +19,6 @@ autocue-input = { path = "../autocue-input" }
 clap.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+winit.workspace = true
+wgpu.workspace = true
+pollster.workspace = true

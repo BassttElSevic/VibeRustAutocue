@@ -23,5 +23,9 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Windowing & rendering (Phase 2+)
+# Windowing & rendering
 winit = "0.30"
+wgpu = "24"
+cosmic-text = "0.13"
+fontdb = "0.22"
+pollster = "0.4"

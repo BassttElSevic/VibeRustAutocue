@@ -9,6 +9,10 @@ pub mod mirror;
 pub mod painter;
 pub mod window;
 
+pub use layout::LayoutEngine;
+pub use painter::Painter;
+pub use window::RenderWindow;
+
 /// Render error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
