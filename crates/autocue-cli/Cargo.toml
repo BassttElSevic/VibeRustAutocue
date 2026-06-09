@@ -1,0 +1,21 @@
+[package]
+name = "autocue-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "CLI entry point for VibeRustAutocue — a cross-platform teleprompter"
+
+[[bin]]
+name = "autocue"
+path = "src/main.rs"
+
+[dependencies]
+autocue-core = { path = "../autocue-core" }
+autocue-config = { path = "../autocue-config" }
+autocue-render = { path = "../autocue-render" }
+autocue-input = { path = "../autocue-input" }
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
