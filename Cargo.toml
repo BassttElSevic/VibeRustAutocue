@@ -1,0 +1,27 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Basstt ElSevic <2911312474@qq.com>"]
+repository = "https://github.com/bassttelsevic/VibeRustAutocue"
+description = "A cross-platform teleprompter (AutoCue) built in Rust"
+
+[workspace.dependencies]
+# Serialization & config
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+thiserror = "2"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Windowing & rendering (Phase 2+)
+winit = "0.30"
