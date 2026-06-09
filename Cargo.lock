@@ -200,6 +200,7 @@ dependencies = [
 name = "autocue-input"
 version = "0.1.0"
 dependencies = [
+ "autocue-core",
  "serde",
  "thiserror 2.0.18",
  "winit",

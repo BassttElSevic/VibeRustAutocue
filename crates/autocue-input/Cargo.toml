@@ -11,3 +11,4 @@ description = "Input layer for VibeRustAutocue: keyboard shortcuts, remote contr
 thiserror.workspace = true
 winit.workspace = true
 serde.workspace = true
+autocue-core = { path = "../autocue-core" }

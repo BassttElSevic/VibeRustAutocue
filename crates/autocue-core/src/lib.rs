@@ -9,6 +9,8 @@ pub mod script;
 pub mod scroll;
 pub mod tokenizer;
 
+pub use script::DisplayMode;
+
 /// Core error type used across the engine.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -22,3 +24,18 @@ pub enum Error {
 
 /// Result alias for core operations.
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// 前端向后端发送的命令
+#[derive(Debug, Clone)]
+pub enum EngineCommand {
+    Play,
+    Pause,
+    TogglePlay,
+    SeekForward(usize),
+    SeekBackward(usize),
+    SetSpeed(f64),
+    SetMode(DisplayMode),
+    NextHeading,
+    PrevHeading,
+    SetFontSize(f32),
+}
