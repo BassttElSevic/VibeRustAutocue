@@ -8,49 +8,73 @@
 
 ```mermaid
 graph TD
-    CLI[CLI 入口<br/>clap 参数解析] --> App[Application 主控]
-    App --> Config[配置管理]
-    App --> Engine[核心引擎]
-    App --> Render[渲染层]
-    App --> Input[输入控制]
+    subgraph Frontend["🖥 前端 (GUI)"]
+        Render[Render 渲染层<br/>winit + wgpu + cosmic-text]
+        Input[Input 输入控制<br/>键盘 + WebSocket]
+    end
 
-    Config --> FileConfig[文件配置 TOML]
-    Config --> EnvConfig[环境变量覆盖]
+    subgraph Backend["⚙ 后端 (Engine)"]
+        Engine[Core 核心引擎<br/>文稿加载 / 分词 / 滚动]
+        Config[Config 配置层<br/>TOML 解析 / 主题]
+    end
+
+    subgraph Orchestrator["🔗 编排层"]
+        CLI[CLI 入口<br/>clap 参数解析]
+    end
+
+    CLI -->|组合| Engine
+    CLI -->|组合| Config
+    CLI -->|组合| Render
+    CLI -->|组合| Input
 
     Engine --> Loader[文稿加载器]
     Engine --> Tokenizer[分词 / 分块]
     Engine --> Scroll[滚动状态机]
 
-    Render --> Window[窗口管理 winit]
-    Render --> TextLayout[文本排版 cosmic-text]
-    Render --> Gfx[图形绘制 wgpu]
+    Render --> Window[窗口管理]
+    Render --> TextLayout[文本排版]
+    Render --> Gfx[图形绘制]
     Render --> ModeCtrl[展示模式控制]
 
     Input --> Kbd[键盘控制]
     Input --> Remote[远程遥控 WebSocket]
+
+    Input -->|命令| Engine
+    Engine -->|状态| Render
 ```
+
+> **核心约束**：后端（Core + Config）永远不依赖前端（Render + Input）的 crate。所有通信通过 trait 接口完成。
 
 ---
 
 ## 2. 分层架构
 
 ```
-┌─────────────────────────────────────────┐
-│               CLI Layer                  │
-│  clap derive: 子命令、参数、验证          │
-├─────────────────────────────────────────┤
-│            Application Core              │
-│  生命周期管理、模块编排、事件循环          │
-├──────────────┬──────────────┬───────────┤
-│    Engine     │   Render     │   Input   │
-│  文稿加载     │  窗口+绘制   │  键盘/遥控 │
-│  分词分块     │  展示模式    │  快捷键    │
-│  滚动控制     │  标题叠加    │  WebSocket │
-│  样式系统     │  字体缩放    │            │
-├──────────────┴──────────────┴───────────┤
-│            Infrastructure                │
-│  Config (serde+TOML)  │  Logging (tracing) │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│                  CLI Layer                       │
+│    clap derive: 子命令、参数、验证                │
+│    角色：编排层 — 组合前后端，启动事件循环         │
+├────────────────────┬────────────────────────────┤
+│    后端 (Backend)   │      前端 (Frontend)        │
+│                    │                            │
+│  ┌──────────────┐  │  ┌──────────────────────┐  │
+│  │ autocue-core │  │  │  autocue-render      │  │
+│  │ 文稿加载     │  │  │  窗口 + wgpu 绘制      │  │
+│  │ 分词分块     │  │  │  cosmic-text 排版     │  │
+│  │ 滚动状态     │  │  │  展示模式调度          │  │
+│  │ 数据模型     │  │  │  标题叠加条            │  │
+│  └──────────────┘  │  │  镜像翻转              │  │
+│                    │  └──────────────────────┘  │
+│  ┌──────────────┐  │                            │
+│  │autocue-config│  │  ┌──────────────────────┐  │
+│  │ TOML 解析    │  │  │  autocue-input       │  │
+│  │ 主题预设     │  │  │  键盘快捷键映射        │  │
+│  │ 默认值       │  │  │  WebSocket 远程控制    │  │
+│  └──────────────┘  │  └──────────────────────┘  │
+├────────────────────┴────────────────────────────┤
+│              Infrastructure                      │
+│    Logging (tracing)  │  Error (thiserror)       │
+└─────────────────────────────────────────────────┘
 ```
 
 ---
@@ -61,25 +85,25 @@ graph TD
 VibeRustAutocue/
 ├── Cargo.toml              # workspace root
 ├── crates/
-│   ├── autocue-core/       # 核心引擎（无 GUI 依赖，不碰 GPU/窗口）
+│   ├── autocue-core/       # 【后端】核心引擎 — 不依赖 GUI
 │   │   ├── src/
-│   │   │   ├── lib.rs
+│   │   │   ├── lib.rs          # Error / Result 类型 + Engine trait
 │   │   │   ├── loader.rs       # 文稿加载 (txt, md, docx)
 │   │   │   ├── clipboard.rs    # 剪贴板读取 (arboard)
 │   │   │   ├── tokenizer.rs    # 分块 / 分词
 │   │   │   ├── scroll.rs       # 滚动状态机
-│   │   │   ├── script.rs       # 脚本数据结构
+│   │   │   ├── script.rs       # 数据模型 (Script/Paragraph/Chunk)
 │   │   │   └── marker.rs       # 书签 / 标记点
 │   │   └── Cargo.toml
 │   │
-│   ├── autocue-config/     # 配置层
+│   ├── autocue-config/     # 【后端】配置层 — 不依赖 GUI
 │   │   ├── src/
 │   │   │   ├── lib.rs
 │   │   │   ├── defaults.rs
 │   │   │   └── theme.rs        # 颜色 / 字体预设
 │   │   └── Cargo.toml
 │   │
-│   ├── autocue-render/     # 渲染层 (winit + cosmic-text + wgpu)
+│   ├── autocue-render/     # 【前端】渲染层
 │   │   ├── src/
 │   │   │   ├── lib.rs
 │   │   │   ├── window.rs       # winit 窗口封装
@@ -90,41 +114,144 @@ VibeRustAutocue/
 │   │   │   └── mirror.rs       # 镜像翻转
 │   │   └── Cargo.toml
 │   │
-│   ├── autocue-input/      # 输入控制
+│   ├── autocue-input/      # 【前端】输入控制
 │   │   ├── src/
 │   │   │   ├── lib.rs
 │   │   │   ├── keyboard.rs     # 全局快捷键
 │   │   │   └── remote.rs       # WebSocket 远程控制
 │   │   └── Cargo.toml
 │   │
-│   └── autocue-cli/        # 二进制入口
+│   └── autocue-cli/        # 【编排层】二进制入口
 │       ├── src/
-│       │   └── main.rs
+│       │   └── main.rs         # 组合前后端，启动事件循环
 │       └── Cargo.toml
 ```
 
-### 依赖关系
+### 依赖方向（单向）
 
 ```mermaid
 graph LR
-    cli[autocue-cli] --> core[autocue-core]
-    cli --> config[autocue-config]
-    cli --> render[autocue-render]
-    cli --> input[autocue-input]
+    subgraph 编排层
+        cli[autocue-cli]
+    end
+
+    subgraph 后端
+        core[autocue-core]
+        config[autocue-config]
+    end
+
+    subgraph 前端
+        render[autocue-render]
+        input[autocue-input]
+    end
+
+    cli --> core
+    cli --> config
+    cli --> render
+    cli --> input
 
     render --> core
     render --> config
     input --> core
     input --> config
+
+    core -.->|trait 定义| render
+    core -.->|trait 定义| input
 ```
 
-- `autocue-core` 保持 **无平台/GUI 依赖**，可独立测试。
-- `autocue-render` 和 `autocue-input` 各自是平台相关层（但都是纯 Rust 绑定）。
-- `autocue-cli` 作为胶水层，组合所有 crate。
+**关键规则**：
+- 后端 crate **永远不** `use autocue_render::*` 或 `use autocue_input::*`
+- 后端定义 trait 接口，前端实现或消费
+- 所有跨边界通信通过 trait + 事件枚举完成
 
 ---
 
-## 4. 核心数据流
+## 4. GUI 前后端分离原则
+
+### 4.1 核心理念
+
+提词器的 GUI 采用**前后端分离**架构，类似 Web 开发中的前后端分离模式：
+
+| | 后端 (Backend) | 前端 (Frontend) |
+|---|---|---|
+| **负责** | 业务逻辑、数据处理、状态管理 | 窗口渲染、用户输入、视觉效果 |
+| **crate** | `autocue-core` + `autocue-config` | `autocue-render` + `autocue-input` |
+| **依赖** | 纯 Rust，零 GUI 依赖 | winit, wgpu, cosmic-text |
+| **测试** | 纯单元测试，无头运行 | 需要窗口环境或 mock |
+| **可替换** | — | 可以换 GUI 框架而不改后端 |
+
+### 4.2 通信契约 — Trait 边界
+
+后端通过 trait 定义契约，前端依赖 trait 而非具体实现：
+
+```rust
+// === 定义在 autocue-core/src/lib.rs ===
+
+/// 引擎对外暴露的只读状态
+pub struct EngineState {
+    pub current_chunk: Chunk,
+    pub progress: f32,           // 0.0 ~ 1.0
+    pub speed: f64,              // 字/秒
+    pub is_playing: bool,
+    pub current_heading: Option<String>, // .md 标题
+    pub mode: DisplayMode,
+}
+
+/// 前端向后端发送的命令
+pub enum EngineCommand {
+    Play,
+    Pause,
+    TogglePlay,
+    SeekForward(usize),     // 前进 n 句
+    SeekBackward(usize),    // 后退 n 句
+    SetSpeed(f64),
+    SetMode(DisplayMode),
+    NextHeading,
+    PrevHeading,
+    SetFontSize(f32),
+}
+
+/// 引擎 trait — 后端实现，前端调用
+pub trait Engine {
+    fn state(&self) -> &EngineState;
+    fn send_command(&mut self, cmd: EngineCommand);
+    fn tick(&mut self, delta: f64);  // 每帧调用
+}
+```
+
+### 4.3 事件循环（单向数据流）
+
+```
+  ┌─────────┐    EngineCommand     ┌──────────┐
+  │  Input   │ ──────────────────▶ │  Engine   │
+  │ (前端)   │                     │ (后端)    │
+  └─────────┘                     └──────────┘
+                                       │
+                                  EngineState
+                                       │
+                                       ▼
+                                  ┌──────────┐
+                                  │  Render  │
+                                  │ (前端)   │
+                                  └──────────┘
+```
+
+**规则**：
+1. 状态只从 Engine 流向 Render（Render 不修改 Engine 状态）
+2. 命令只从 Input 流向 Engine（Engine 不主动查询 Input）
+3. CLI 编排层持有 Engine 的所有权，Render/Input 通过 `&mut Engine` 访问
+4. 每帧：`Input 事件 → Engine::send_command() → Engine::tick() → Render::draw(engine.state())`
+
+### 4.4 好处
+
+- **可测试性**：`Engine` trait 可以 mock，前端可以在无窗口环境测试交互逻辑
+- **可替换性**：将来换用 `egui` 或 `iced`，只需改写 `autocue-render`，Core 一行不改
+- **并行开发**：后端和前端的实现可以独立进行，只要契约不变
+- **代码审查**：业务逻辑变更只影响 Core crate，UI 调整只影响 Render crate
+
+---
+
+## 5. 核心数据流
 
 ```mermaid
 sequenceDiagram
@@ -141,9 +268,9 @@ sequenceDiagram
     CLI->>Input: start_listening()
 
     loop 事件循环
-        Input-->>Engine: 事件 (play/pause/speed/font_size)
+        Input-->>Engine: EngineCommand (play/pause/speed)
         Engine->>Engine: 更新滚动位置
-        Engine->>Render: 当前块 + 进度 + 标题
+        Engine->>Render: EngineState (当前块 + 进度 + 标题)
         Render->>Render: 排版 + 绘制
     end
 ```
@@ -188,11 +315,11 @@ sequenceDiagram
 
 ---
 
-## 5. 展示模式
+## 6. 展示模式
 
 提词器提供三种展示模式，用户可在运行时通过按键实时切换。**匀速滚动是统一基线**，所有格式都支持。
 
-### 5.1 三种模式对比
+### 6.1 三种模式对比
 
 ```
 模式 A: 匀速滚动 (Smooth Scroll)
@@ -234,7 +361,7 @@ sequenceDiagram
 | 速度调节 | 实时调速 | N/A | 实时调速 |
 | 标题叠加 | 始终可见 | 块顶部 | 始终可见 |
 
-### 5.2 .md 文档的特殊处理
+### 6.2 .md 文档的特殊处理
 
 对于 `.md` 文件，**三种模式都支持**。额外提供：
 
@@ -245,7 +372,7 @@ sequenceDiagram
 
 ---
 
-## 6. 渲染管线 — 大字显示方案
+## 7. 渲染管线 — 大字显示方案
 
 ```
 ┌──────────┐    ┌──────────────┐    ┌────────────┐
@@ -255,7 +382,7 @@ sequenceDiagram
 └──────────┘    └──────────────┘    └────────────┘
 ```
 
-### 6.1 为什么是 cosmic-text
+### 7.1 为什么是 cosmic-text
 
 `cosmic-text` 做的是**文本塑形 + 排版**，不负责往屏幕上画像素。它解决的核心问题：
 
@@ -267,7 +394,7 @@ sequenceDiagram
 
 `cosmic-text` 的输出是一组 **glyph 位置 + 纹理 atlas**，画到屏幕上是 `wgpu` 的工作。
 
-### 6.2 字体大小调节
+### 7.2 字体大小调节
 
 字体大小是提词器的核心体验参数。在 13 寸笔记本上可能需要 60pt 才能看清，接上外接显示器降到 32pt，上了提词器反射屏又需要 80pt+。
 
@@ -284,7 +411,7 @@ sequenceDiagram
 
 缩放实现：修改 `cosmic-text` 的 `Attrs::font_size` → 重新计算 layout → 重新生成 glyph atlas → 下一帧生效。整个过程在 ~2ms 内完成，无闪烁。
 
-### 6.3 完整技术选型
+### 7.3 完整技术选型
 
 | 层 | 首选 crate | 角色 |
 |----|-----------|------|
@@ -296,13 +423,13 @@ sequenceDiagram
 | GPU 绘制 | `wgpu` | 把 glyph atlas 画到窗口 surface |
 | 备选 (纯 CPU) | `softbuffer` | 不依赖 GPU，适合虚拟机/无 GPU 环境 |
 
-### 6.4 镜像模式
+### 7.4 镜像模式
 
 提词器通常将画面左右翻转后投射到 45° 反射镜上。在 `wgpu` 的片元着色器中对 UV 坐标做一次 `u = 1.0 - u` 即可实现，无需额外依赖。
 
 ---
 
-## 7. 跨平台策略 — 为什么 `cargo build` 即用
+## 8. 跨平台策略 — 为什么 `cargo build` 即用
 
 三个目标平台：**Linux、macOS、Windows**。选择 `winit` + `wgpu` + `cosmic-text` 这条栈，不是因为它们"功能最多"，而是因为它们在三个平台上**都走原生 API，且都是纯 Rust 或 Rust 绑定**：
 
@@ -345,9 +472,9 @@ sequenceDiagram
 
 ---
 
-## 8. 输入控制
+## 9. 输入控制
 
-### 8.1 默认键盘映射
+### 9.1 默认键盘映射
 
 #### 播放控制
 
@@ -396,14 +523,14 @@ sequenceDiagram
 | `F11` | 全屏切换 |
 | `Ctrl+R` | 镜像模式切换 |
 
-### 8.2 远程控制
+### 9.2 远程控制
 
 - **WebSocket** 服务端 (内嵌于进程): 外部 app 通过 JSON 指令控制所有上述操作。
 - 未来可选 OSC (Open Sound Control)，适用于专业演播室控制台。
 
 ---
 
-## 9. 配置文件设计 (`autocue.toml`)
+## 10. 配置文件设计 (`autocue.toml`)
 
 ```toml
 [window]
@@ -448,7 +575,7 @@ websocket_bind = "127.0.0.1:9090"
 
 ---
 
-## 10. CLI 命令设计
+## 11. CLI 命令设计
 
 ```bash
 # 从文件加载（默认匀速滚动）
@@ -480,7 +607,7 @@ autocue check speech.txt
 
 ---
 
-## 11. 状态机
+## 12. 状态机
 
 ```mermaid
 stateDiagram-v2
@@ -498,11 +625,11 @@ stateDiagram-v2
 
 ---
 
-## 12. 路线图 (MVP → 完整版)
+## 13. 路线图 (MVP → 完整版)
 
 | 阶段 | 内容 | 里程碑 |
 |------|------|--------|
-| **Phase 0** | 项目骨架: workspace、crate 拆分、CI | `cargo build` 通过 |
+| **Phase 0** | 项目骨架: workspace、crate 拆分、CI | `cargo build` 通过 ✓ |
 | **Phase 1** | `autocue-core`: loader (txt/md/docx) + clipboard + tokenizer + scroll | 单元测试全部通过 |
 | **Phase 2** | `autocue-render`: winit 窗口 + cosmic-text 排版 + wgpu 绘制 + 字体缩放 | 能显示静态大字，Ctrl+=/- 生效 |
 | **Phase 3** | 匀速滚动模式 + 键盘控制 + 标题叠加条 | 可用的基础提词器 |
@@ -512,4 +639,4 @@ stateDiagram-v2
 
 ---
 
-> 本架构文档随项目演进持续更新。当前版本: **draft v0.3**
+> 本架构文档随项目演进持续更新。当前版本: **draft v0.4**
