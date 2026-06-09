@@ -9,3 +9,4 @@ description = "Core engine for VibeRustAutocue: script loading, tokenization, sc
 
 [dependencies]
 thiserror.workspace = true
+serde.workspace = true
